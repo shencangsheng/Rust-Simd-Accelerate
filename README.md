@@ -1,4 +1,4 @@
-## RUST SIMD ACC
+## Rust Simd Acc
 
 ### How to use for your
 
