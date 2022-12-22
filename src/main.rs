@@ -1,13 +1,26 @@
 #![feature(portable_simd)]
 #![allow(non_camel_case_types)]
 
+use std::time::Instant;
+
 use core_simd::{u8x16, u8x32, u8x4, u8x64, u8x8, Simd};
 
 fn main() {
-    const s1: [u8; 8] = [1, 1, 0, 0, 1, 0, 1, 0];
-    const s2: [u8; 8] = [1, 1, 0, 1, 1, 0, 0, 0];
-    let mut result: [u8; 8] = [0; 8];
-    println!("{:?}", simd(&s1, &s2, 0, result));
+    const LANES: usize = 6000;
+    const S1: [u8; LANES] = [1; LANES];
+    const S2: [u8; LANES] = [0; LANES];
+    let start = Instant::now();
+    let mut result = [0; S1.len()];
+    for i in 0..LANES {
+        result[i as usize] = S1[i as usize] & S2[i as usize];
+    }
+    let duration = start.elapsed();
+    println!("{:?}", result.len());
+    println!("Time elapsed in default is: {:?}", duration);
+    let start = Instant::now();
+    println!("{:?}", simd(&S1, &S2, 0, [0; S1.len()]).len());
+    let duration = start.elapsed();
+    println!("Time elapsed in SIMD is: {:?}", duration);
 }
 
 fn simd<const LANES: usize>(
@@ -17,21 +30,22 @@ fn simd<const LANES: usize>(
     mut result: [u8; LANES],
 ) -> [u8; LANES] {
     if s1.len() == 1 {
-        return *s1;
+        return [s1[0]; LANES];
     }
-    const simd_scope: [i32; 5] = [64, 32, 16, 8, 4];
+    const SIMD_SCOPE: [i32; 5] = [64, 32, 16, 8, 4];
     let surplus = s1.len() as i32 - current;
     let mut interval = None;
-    for item in simd_scope {
+    for item in SIMD_SCOPE {
         if item <= surplus {
             interval = Some(item);
             break;
         }
     }
     let interval = match interval {
-        None => 1,
+        None => LANES as i32 - current,
         Some(i) => i,
     };
+
     let next = (interval + current) as usize;
 
     match interval {
@@ -75,10 +89,14 @@ fn simd<const LANES: usize>(
                 current,
             );
         }
-        _ => {}
+        _ => {
+            for i in current..next as i32 {
+                result[i as usize] = s1[i as usize] & s2[i as usize];
+            }
+        }
     }
 
-    if next > result.len() {
+    if next >= result.len() {
         return result;
     }
 
@@ -87,47 +105,39 @@ fn simd<const LANES: usize>(
 
 fn simd_u8x32<const LANES: usize>(
     input: Simd<u8, 32>,
-    mut values: [u8; LANES],
+    values: [u8; LANES],
     idx: i32,
 ) -> [u8; LANES] {
-    return push(values, input.to_array(), idx);
+    return push(values, input.as_array(), idx);
 }
 
 fn simd_u8x64<const LANES: usize>(
     input: Simd<u8, 64>,
-    mut values: [u8; LANES],
+    values: [u8; LANES],
     idx: i32,
 ) -> [u8; LANES] {
-    return push(values, input.to_array(), idx);
+    return push(values, input.as_array(), idx);
 }
 
 fn simd_u8x16<const LANES: usize>(
     input: Simd<u8, 16>,
-    mut values: [u8; LANES],
+    values: [u8; LANES],
     idx: i32,
 ) -> [u8; LANES] {
-    return push(values, input.to_array(), idx);
+    return push(values, input.as_array(), idx);
 }
 
-fn simd_u8x8<const LANES: usize>(
-    input: Simd<u8, 8>,
-    mut values: [u8; LANES],
-    idx: i32,
-) -> [u8; LANES] {
-    return push(values, input.to_array(), idx);
+fn simd_u8x8<const LANES: usize>(input: Simd<u8, 8>, values: [u8; LANES], idx: i32) -> [u8; LANES] {
+    return push(values, input.as_array(), idx);
 }
 
-fn simd_u8x4<const LANES: usize>(
-    input: Simd<u8, 4>,
-    mut values: [u8; LANES],
-    idx: i32,
-) -> [u8; LANES] {
-    return push(values, input.to_array(), idx);
+fn simd_u8x4<const LANES: usize>(input: Simd<u8, 4>, values: [u8; LANES], idx: i32) -> [u8; LANES] {
+    return push(values, input.as_array(), idx);
 }
 
 fn push<const LANES: usize, const LANES2: usize>(
     mut values: [u8; LANES],
-    array: [u8; LANES2],
+    array: &[u8; LANES2],
     mut idx: i32,
 ) -> [u8; LANES] {
     for item in array.iter() {
