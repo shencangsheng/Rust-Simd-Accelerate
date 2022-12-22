@@ -12,7 +12,7 @@ fn main() {
     let start = Instant::now();
     let mut result = [0; S1.len()];
     for i in 0..LANES {
-        result[i as usize] = S1[i as usize] & S2[i as usize];
+        result[i] = S1[i] & S2[i];
     }
     let duration = start.elapsed();
     println!("{:?}", result.len());
